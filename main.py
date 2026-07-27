@@ -1,6 +1,7 @@
 import sys
 import os
 import config
+import argparse
 from core.scanner import create_baseline, check_integrity
 
 
@@ -13,40 +14,61 @@ def print_usage():
     print("  python main.py check   - Проверить целостность")
     print("  python keygen.py       - Сгенерировать ключи")
     print("-" * 50)
-    print("Пример:")
-    print("  1. python keygen.py          # Генерация ключей")
-    print("  2. python main.py init       # Создание baseline")
-    print("  3. python main.py check      # Проверка")
 
 
 def main():
     """Главная функция программы."""
-    # Проверка целевой директории
-    if not os.path.exists(config.TARGET_DIRECTORY):
-        print(f"[!] Ошибка: Папка '{config.TARGET_DIRECTORY}' не найдена.")
-        print("[!] Создайте её перед запуском.")
-        return
+    # Настраиваем парсер аргументов
+    parser = argparse.ArgumentParser(
+        description="File Integrity Monitor (FIM) - система контроля целостности файлов"
+    )
+    parser.add_argument(
+        'command',
+        nargs='?',  # <-- Делает аргумент НЕОБЯЗАТЕЛЬНЫМ
+        default=None,
+        choices=['init', 'check'],
+        help='Команда: init (создать baseline) или check (проверить целостность)'
+    )
+    parser.add_argument(
+        '--dir',
+        default=config.TARGET_DIRECTORY,
+        help=f'Целевая директория для мониторинга (по умолчанию: {config.TARGET_DIRECTORY})'
+    )
 
-    # Проверка аргументов
-    if len(sys.argv) < 2:
+    args = parser.parse_args()
+
+    # Если команда не указана — выводим справку и выходим
+    if args.command is None:
         print_usage()
         return
 
-    command = sys.argv[1].lower()
+    # Нормализуем путь для кроссплатформенности (Windows/Linux)
+    target_dir = os.path.normpath(args.dir)
+
+    # Проверяем существование целевой директории
+    if not os.path.exists(target_dir):
+        print(f"[!] Ошибка: Папка '{target_dir}' не найдена.")
+        print("[!] Укажите существующую директорию через --dir или создайте её.")
+        return
+
+    command = args.command.lower()
 
     if command == 'init':
-        # Проверяем наличие ключей
+        # Проверяем наличие приватного ключа перед созданием baseline
         if not os.path.exists(config.PRIVATE_KEY_FILE):
             print("[!] Warning: Приватный ключ не найден!")
-            print("[!] Для подписи baseline запустите: python keygen.py")
+            print("[!] Для подписи baseline рекомендуется запустить: python keygen.py")
             response = input("Продолжить без подписи? (y/N): ").strip().lower()
             if response != 'y':
+                print("[*] Отменено.")
                 return
 
-        create_baseline(config.TARGET_DIRECTORY)
+        print(f"\n[*] Создание базовой линии для: {target_dir}")
+        create_baseline(target_dir)
 
     elif command == 'check':
-        check_integrity(config.TARGET_DIRECTORY)
+        print(f"\n[*] Проверка целостности для: {target_dir}")
+        check_integrity(target_dir)
 
     else:
         print(f"[!] Неизвестная команда: {command}")
