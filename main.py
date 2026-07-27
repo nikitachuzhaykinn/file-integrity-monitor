@@ -54,15 +54,24 @@ def main():
             print(f"[*] Системное хранилище доступно (бэкенд: {storage_status['backend']})")
 
         private_key_exists = False
+        password = None
 
-        if storage_status['available'] and storage_status['private_key_exists']:
-            private_key_exists = True
-            print("[*] Приватный ключ найден в системном хранилище")
+        # --- 1. Проверка нового метода (мастер-ключ + зашифрованный файл) ---
+        if config.USE_KEYRING and storage_status['available']:
+            from core.keyring_storage import master_key_exists_in_storage
+            if master_key_exists_in_storage(config.KEYRING_USERNAME):
+                if os.path.exists(config.ENCRYPTED_PRIVATE_KEY_FILE):
+                    private_key_exists = True
+                    print("[*] Приватный ключ найден (мастер-ключ + зашифрованный файл)")
+                else:
+                    print("[!] Мастер-ключ есть, но файл private_key.enc отсутствует")
 
+        # --- 2. Проверка старого метода (файл private_key.pem) ---
         if not private_key_exists and os.path.exists(config.PRIVATE_KEY_FILE):
             private_key_exists = True
             print(f"[*] Приватный ключ найден: {config.PRIVATE_KEY_FILE}")
 
+        # --- 3. Если ключ не найден ---
         if not private_key_exists:
             print("[!] Warning: Приватный ключ не найден!")
             print("[!] Для подписи baseline рекомендуется запустить: python keygen.py")
@@ -70,7 +79,7 @@ def main():
             if response != 'y':
                 print("[*] Отменено.")
                 return
-            password = None
+            # password = None
         else:
             print("\n[*] Для подписи baseline требуется приватный ключ.")
             password = prompt_for_password("Введите пароль от приватного ключа: ")

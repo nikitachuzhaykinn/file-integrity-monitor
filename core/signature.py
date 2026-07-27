@@ -10,7 +10,10 @@ from core.keyring_storage import (
     load_key_from_storage,
     key_exists_in_storage,
     is_storage_available,
-    get_available_backend
+    get_available_backend,
+    save_master_key_to_storage,
+    load_master_key_from_storage,
+    master_key_exists_in_storage
 )
 
 

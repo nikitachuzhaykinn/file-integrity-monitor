@@ -24,7 +24,10 @@ PUBLIC_KEY_FILE = 'keys/public_key.pem'
 KEYRING_USERNAME = 'fim_user'
 
 # Использовать системное хранилище (True) или файлы (False)
-USE_KEYRING = None  # None = спрашивать при первом запуске
+USE_KEYRING = True  # None = спрашивать при первом запуске
 
 # Размер RSA ключа (2048 или 4096 бит)
 RSA_KEY_SIZE = 2048
+
+# Путь к зашифрованному приватному ключу (используется с мастер-ключом)
+ENCRYPTED_PRIVATE_KEY_FILE = 'keys/private_key.enc'
