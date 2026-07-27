@@ -4,8 +4,14 @@ import config
 from core.signature import sign_file, verify_file_signature, load_private_key, load_public_key
 
 
-def save_baseline(baseline_data):
-    """Сохраняет базовую линию в JSON файл и подписывает её."""
+def save_baseline(baseline_data, password=None):
+    """
+    Сохраняет базовую линию в JSON файл и подписывает её.
+
+    Аргументы:
+        baseline_data (dict): Данные для сохранения
+        password (bytes или None): Пароль для расшифровки приватного ключа
+    """
     # Сохраняем baseline
     with open(config.BASELINE_FILE, 'w', encoding=config.ENCODING) as f:
         json.dump(baseline_data, f, indent=4, ensure_ascii=False)
@@ -15,8 +21,12 @@ def save_baseline(baseline_data):
     # Подписываем файл, если есть приватный ключ
     if os.path.exists(config.PRIVATE_KEY_FILE):
         try:
-            private_key = load_private_key(config.PRIVATE_KEY_FILE)
+            private_key = load_private_key(config.PRIVATE_KEY_FILE, password)
             sign_file(config.BASELINE_FILE, private_key, config.BASELINE_SIGNATURE_FILE)
+        except ValueError as e:
+            print(f"[!] Ошибка: Неверный пароль для приватного ключа")
+            print(f"[!] Подпись НЕ создана! Без подписи baseline небезопасен.")
+            print(f"[!] Детали: {e}")
         except Exception as e:
             print(f"[!] Warning: Не удалось подписать baseline: {e}")
     else:
@@ -27,9 +37,6 @@ def save_baseline(baseline_data):
 def load_baseline():
     """
     Загружает базовую линию из JSON файла с проверкой подписи.
-
-    Возвращает:
-        dict: Данные базовой линии или None при ошибке
     """
     if not os.path.exists(config.BASELINE_FILE):
         return None

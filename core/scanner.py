@@ -5,9 +5,7 @@ from core.baseline import save_baseline, load_baseline, baseline_exists
 
 
 def scan_directory(directory):
-    """
-    Сканирует директорию и возвращает словарь {путь: хеш}.
-    """
+    """Сканирует директорию и возвращает словарь {путь: хеш}."""
     file_hashes = {}
     print(f"[*] Сканирование: {directory}")
 
@@ -26,23 +24,22 @@ def scan_directory(directory):
     return file_hashes
 
 
-def create_baseline(directory):
-    """Создает новую базовую линию."""
+def create_baseline(directory, password=None):
+    """
+    Создает новую базовую линию с опциональным паролем для подписи.
+    """
     data = scan_directory(directory)
-    save_baseline(data)
+    save_baseline(data, password)
 
 
 def check_integrity(directory):
     """Проверяет целостность файлов."""
-    # Проверяем существование baseline
     if not baseline_exists():
         print("[!] Ошибка: Базовая линия не найдена. Запустите 'init'.")
         return
 
-    # Загружаем baseline (может вернуть None при ошибке подписи)
     baseline_data = load_baseline()
 
-    # 🔴 ВАЖНО: Проверяем, успешно ли загрузились данные
     if baseline_data is None:
         print("[!] КРИТИЧЕСКАЯ ОШИБКА: Не удалось загрузить baseline.json")
         print("[!] Проверка целостности НЕ МОЖЕТ быть выполнена!")
@@ -58,7 +55,6 @@ def check_integrity(directory):
 
     print(f"[*] Проверка целостности...")
 
-    # Проверка существующих файлов
     for root, dirs, files in os.walk(directory):
         for file_name in files:
             full_path = os.path.join(root, file_name)
@@ -71,12 +67,10 @@ def check_integrity(directory):
             elif current_hash != baseline_data[full_path]['hash']:
                 violations.append(f"[ИЗМЕНЕН] {full_path}")
 
-    # Проверка удаленных файлов
     for stored_path in baseline_data:
         if stored_path not in current_files:
             violations.append(f"[УДАЛЕН] {stored_path}")
 
-    # Вывод отчета
     print("-" * 50)
     if violations:
         print(f"[!] НАЙДЕНО НАРУШЕНИЙ: {len(violations)}")
