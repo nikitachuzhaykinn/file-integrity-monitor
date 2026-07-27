@@ -16,9 +16,15 @@ CHUNK_SIZE = 4096
 # Кодировка для работы с файлами
 ENCODING = 'utf-8'
 
-# Пути к криптографическим ключам
+# Пути к криптографическим ключам (для файлового метода)
 PRIVATE_KEY_FILE = 'keys/private_key.pem'
 PUBLIC_KEY_FILE = 'keys/public_key.pem'
+
+# Имя пользователя для системного хранилища
+KEYRING_USERNAME = 'fim_user'
+
+# Использовать системное хранилище (True) или файлы (False)
+USE_KEYRING = None  # None = спрашивать при первом запуске
 
 # Размер RSA ключа (2048 или 4096 бит)
 RSA_KEY_SIZE = 2048

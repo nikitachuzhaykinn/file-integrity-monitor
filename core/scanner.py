@@ -5,7 +5,6 @@ from core.baseline import save_baseline, load_baseline, baseline_exists
 
 
 def scan_directory(directory):
-    """Сканирует директорию и возвращает словарь {путь: хеш}."""
     file_hashes = {}
     print(f"[*] Сканирование: {directory}")
 
@@ -25,15 +24,11 @@ def scan_directory(directory):
 
 
 def create_baseline(directory, password=None):
-    """
-    Создает новую базовую линию с опциональным паролем для подписи.
-    """
     data = scan_directory(directory)
     save_baseline(data, password)
 
 
 def check_integrity(directory):
-    """Проверяет целостность файлов."""
     if not baseline_exists():
         print("[!] Ошибка: Базовая линия не найдена. Запустите 'init'.")
         return

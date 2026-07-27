@@ -3,11 +3,10 @@ import os
 import config
 import argparse
 from core.scanner import create_baseline, check_integrity
-from core.signature import prompt_for_password
+from core.signature import prompt_for_password, check_storage_status
 
 
 def print_usage():
-    """Выводит справку по использованию."""
     print("File Integrity Monitor (FIM) с цифровой подписью")
     print("-" * 50)
     print("Использование:")
@@ -18,7 +17,6 @@ def print_usage():
 
 
 def main():
-    """Главная функция программы."""
     parser = argparse.ArgumentParser(
         description="File Integrity Monitor (FIM) - система контроля целостности файлов"
     )
@@ -51,8 +49,21 @@ def main():
     command = args.command.lower()
 
     if command == 'init':
-        # Проверяем наличие приватного ключа
-        if not os.path.exists(config.PRIVATE_KEY_FILE):
+        storage_status = check_storage_status()
+        if storage_status['available']:
+            print(f"[*] Системное хранилище доступно (бэкенд: {storage_status['backend']})")
+
+        private_key_exists = False
+
+        if storage_status['available'] and storage_status['private_key_exists']:
+            private_key_exists = True
+            print("[*] Приватный ключ найден в системном хранилище")
+
+        if not private_key_exists and os.path.exists(config.PRIVATE_KEY_FILE):
+            private_key_exists = True
+            print(f"[*] Приватный ключ найден: {config.PRIVATE_KEY_FILE}")
+
+        if not private_key_exists:
             print("[!] Warning: Приватный ключ не найден!")
             print("[!] Для подписи baseline рекомендуется запустить: python keygen.py")
             response = input("Продолжить без подписи? (y/N): ").strip().lower()
@@ -61,17 +72,14 @@ def main():
                 return
             password = None
         else:
-            # Запрашиваем пароль для приватного ключа
             print("\n[*] Для подписи baseline требуется приватный ключ.")
             password = prompt_for_password("Введите пароль от приватного ключа: ")
             if password is None:
                 print("[!] Пароль не введён. Попытка загрузить ключ без пароля...")
-                password = None
             else:
                 print("[*] Пароль принят")
 
         print(f"\n[*] Создание базовой линии для: {target_dir}")
-        # Модифицируем create_baseline для передачи пароля
         from core.scanner import scan_directory
         from core.baseline import save_baseline
 
