@@ -3,27 +3,28 @@
 # Выберите профиль через переменную окружения FIM_PROFILE (по умолчанию default)
 
 default:
-  # Основные настройки
   target_directory: ./test_folder
   baseline_file: baseline.json
   baseline_signature_file: baseline.json.sig
   hash_algorithm: sha256
   chunk_size: 4096
   encoding: utf-8
-
-  # Ключи
   private_key_file: keys/private_key.pem
   public_key_file: keys/public_key.pem
   keyring_username: fim_user
   use_keyring: true
   rsa_key_size: 2048
   encrypted_private_key_file: keys/private_key.enc
-
-  # Логирование
   log_file: logs/fim.log
-  log_max_bytes: 5242880   # 5 МБ
+  log_max_bytes: 5242880
   log_backup_count: 3
   log_level: INFO
+  ignore_patterns:
+    - "*.tmp"
+    - "__pycache__"
+    - ".git"
+    - "*.log"
+    - "Thumbs.db"
 
 production:
   target_directory: /var/www/html
@@ -32,15 +33,19 @@ production:
   hash_algorithm: sha512
   chunk_size: 8192
   encoding: utf-8
-
   private_key_file: /etc/fim/keys/private_key.pem
   public_key_file: /etc/fim/keys/public_key.pem
   keyring_username: fim_prod
   use_keyring: true
   rsa_key_size: 4096
   encrypted_private_key_file: /etc/fim/keys/private_key.enc
-
   log_file: /var/log/fim/fim.log
-  log_max_bytes: 10485760  # 10 МБ
+  log_max_bytes: 10485760
   log_backup_count: 5
   log_level: WARNING
+  ignore_patterns:
+    - "*.tmp"
+    - "__pycache__"
+    - ".git"
+    - "*.log"
+    - "Thumbs.db"

@@ -4,19 +4,37 @@ from core.hasher import calculate_file_hash
 from core.baseline import save_baseline, load_baseline, baseline_exists
 import logging
 from core.config_loader import config
+import fnmatch
 
 logger = logging.getLogger(__name__)
+
+
+def is_ignored(path: str, patterns: list) -> bool:
+    base = os.path.basename(path)
+    for pattern in patterns:
+        if fnmatch.fnmatch(base, pattern):
+            return True
+    return False
 
 
 def scan_directory(directory):
     file_hashes = {}
     logger.info("Сканирование: %s", directory)
 
+    ignore_patterns = getattr(config, 'IGNORE_PATTERNS', [])
+    logger.debug("ignore_patterns = %s", ignore_patterns)   # отладочный вывод
+
     for root, dirs, files in os.walk(directory):
+        # Удаляем игнорируемые папки из обхода
+        dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d), ignore_patterns)]
+
         for file_name in files:
             full_path = os.path.join(root, file_name)
-            file_hash = calculate_file_hash(full_path)
+            if is_ignored(full_path, ignore_patterns):
+                logger.debug("Игнорируем файл: %s", full_path)
+                continue
 
+            file_hash = calculate_file_hash(full_path)
             if file_hash:
                 file_hashes[full_path] = {
                     'hash': file_hash,
@@ -51,14 +69,19 @@ def check_integrity(directory):
 
     current_files = set()
     violations = []
+    ignore_patterns = getattr(config, 'IGNORE_PATTERNS', [])
 
     logger.info("Проверка целостности...")
 
     for root, dirs, files in os.walk(directory):
+        dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d), ignore_patterns)]
+
         for file_name in files:
             full_path = os.path.join(root, file_name)
-            current_files.add(full_path)
+            if is_ignored(full_path, ignore_patterns):
+                continue
 
+            current_files.add(full_path)
             current_hash = calculate_file_hash(full_path)
 
             if full_path not in baseline_data:
@@ -68,7 +91,8 @@ def check_integrity(directory):
 
     for stored_path in baseline_data:
         if stored_path not in current_files:
-            violations.append(f"[УДАЛЕН] {stored_path}")
+            if not is_ignored(stored_path, ignore_patterns):
+                violations.append(f"[УДАЛЕН] {stored_path}")
 
     logger.info("-" * 50)
     if violations:
