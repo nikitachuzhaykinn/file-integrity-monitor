@@ -15,17 +15,20 @@ from core.keyring_storage import (
     load_master_key_from_storage,
     master_key_exists_in_storage
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def generate_key_pair():
-    print(f"[*] Генерация пары ключей RSA ({config.RSA_KEY_SIZE} бит)...")
+    logger.info("Генерация пары ключей RSA (%d бит)...", config.RSA_KEY_SIZE)
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=config.RSA_KEY_SIZE,
         backend=default_backend()
     )
     public_key = private_key.public_key()
-    print("[+] Пара ключей успешно сгенерирована")
+    logger.info("Пара ключей успешно сгенерирована")
     return private_key, public_key
 
 
@@ -37,7 +40,7 @@ def save_private_key(private_key, file_path, password=None):
     encryption_algorithm = serialization.NoEncryption()
     if password is not None:
         encryption_algorithm = serialization.BestAvailableEncryption(password)
-        print("[*] Приватный ключ будет зашифрован паролем")
+        logger.info("Приватный ключ будет зашифрован паролем")
 
     pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -49,7 +52,7 @@ def save_private_key(private_key, file_path, password=None):
         f.write(pem)
 
     os.chmod(file_path, 0o600)
-    print(f"[+] Приватный ключ сохранён: {file_path}")
+    logger.info("Приватный ключ сохранён: %s", file_path)
 
 
 def load_private_key(file_path, password=None):
@@ -81,7 +84,7 @@ def save_public_key(public_key, file_path):
     with open(file_path, 'wb') as f:
         f.write(pem)
 
-    print(f"[+] Публичный ключ сохранён: {file_path}")
+    logger.info("Публичный ключ сохранён: %s", file_path)
 
 
 def load_public_key(file_path):
@@ -110,7 +113,7 @@ def sign_file(file_path, private_key, signature_path):
     with open(signature_path, 'wb') as f:
         f.write(signature)
 
-    print(f"[+] Файл подписан: {signature_path}")
+    logger.info("Файл подписан: %s", signature_path)
 
 
 def verify_file_signature(file_path, public_key, signature_path):
@@ -127,16 +130,16 @@ def verify_file_signature(file_path, public_key, signature_path):
             padding.PKCS1v15(),
             hashes.SHA256()
         )
-        print("[+] Подпись верна ✓")
+        logger.info("Подпись верна ✓")
         return True
     except InvalidSignature:
-        print("[!] ПОДПИСЬ НЕВЕРНА! Файл мог быть изменён! ✗")
+        logger.error("ПОДПИСЬ НЕВЕРНА! Файл мог быть изменён! ✗")
         return False
 
 
 def save_private_key_to_storage(private_key, password=None, username="default"):
     if not is_storage_available():
-        print("[!] Системное хранилище недоступно")
+        logger.warning("Системное хранилище недоступно")
         return False
 
     encryption_algorithm = serialization.NoEncryption()
@@ -154,12 +157,12 @@ def save_private_key_to_storage(private_key, password=None, username="default"):
 
 def load_private_key_from_storage(password=None, username="default"):
     if not is_storage_available():
-        print("[!] Системное хранилище недоступно")
+        logger.warning("Системное хранилище недоступно")
         return None
 
     key_data = load_key_from_storage('private_key', username)
     if key_data is None:
-        print("[!] Приватный ключ не найден в хранилище")
+        logger.warning("Приватный ключ не найден в хранилище")
         return None
 
     try:
@@ -171,15 +174,15 @@ def load_private_key_from_storage(password=None, username="default"):
         return private_key
     except ValueError as e:
         if "incorrect password" in str(e).lower() or "could not deserialize" in str(e).lower():
-            print("[!] Неверный пароль для приватного ключа")
+            logger.error("Неверный пароль для приватного ключа")
         else:
-            print(f"[!] Ошибка загрузки ключа: {e}")
+            logger.error("Ошибка загрузки ключа: %s", e)
         return None
 
 
 def save_public_key_to_storage(public_key, username="default"):
     if not is_storage_available():
-        print("[!] Системное хранилище недоступно")
+        logger.warning("Системное хранилище недоступно")
         return False
 
     pem = public_key.public_bytes(
@@ -192,12 +195,12 @@ def save_public_key_to_storage(public_key, username="default"):
 
 def load_public_key_from_storage(username="default"):
     if not is_storage_available():
-        print("[!] Системное хранилище недоступно")
+        logger.warning("Системное хранилище недоступно")
         return None
 
     key_data = load_key_from_storage('public_key', username)
     if key_data is None:
-        print("[!] Публичный ключ не найден в хранилище")
+        logger.warning("Публичный ключ не найден в хранилище")
         return None
 
     try:
@@ -207,7 +210,7 @@ def load_public_key_from_storage(username="default"):
         )
         return public_key
     except Exception as e:
-        print(f"[!] Ошибка загрузки публичного ключа: {e}")
+        logger.error("Ошибка загрузки публичного ключа: %s", e)
         return None
 
 
@@ -226,10 +229,10 @@ def check_storage_status():
 
 def prompt_for_storage_choice():
     if not is_storage_available():
-        print("[!] Системное хранилище недоступно. Будет использован файловый метод.")
+        logger.warning("Системное хранилище недоступно. Будет использован файловый метод.")
         return False
 
-    print(f"\n[*] Доступно системное хранилище: {get_available_backend()}")
+    logger.info("Доступно системное хранилище: %s", get_available_backend())
     response = input("Использовать системное хранилище для ключей? (Y/n): ").strip().lower()
     return response != 'n'
 
@@ -251,4 +254,4 @@ def prompt_for_password_confirmation():
         if password1 == password2:
             return password1.encode('utf-8')
         else:
-            print("[!] Пароли не совпадают. Попробуйте снова.")
+            logger.warning("Пароли не совпадают. Попробуйте снова.")

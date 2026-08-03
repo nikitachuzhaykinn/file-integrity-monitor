@@ -2,11 +2,14 @@ import os
 from datetime import datetime
 from core.hasher import calculate_file_hash
 from core.baseline import save_baseline, load_baseline, baseline_exists
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def scan_directory(directory):
     file_hashes = {}
-    print(f"[*] Сканирование: {directory}")
+    logger.info("Сканирование: %s", directory)
 
     for root, dirs, files in os.walk(directory):
         for file_name in files:
@@ -19,7 +22,7 @@ def scan_directory(directory):
                     'timestamp': datetime.now().isoformat()
                 }
 
-    print(f"[+] Найдено файлов: {len(file_hashes)}")
+    logger.info("Найдено файлов: %d", len(file_hashes))
     return file_hashes
 
 
@@ -30,25 +33,25 @@ def create_baseline(directory, password=None):
 
 def check_integrity(directory):
     if not baseline_exists():
-        print("[!] Ошибка: Базовая линия не найдена. Запустите 'init'.")
+        logger.error("Базовая линия не найдена. Запустите 'init'.")
         return
 
     baseline_data = load_baseline()
 
     if baseline_data is None:
-        print("[!] КРИТИЧЕСКАЯ ОШИБКА: Не удалось загрузить baseline.json")
-        print("[!] Проверка целостности НЕ МОЖЕТ быть выполнена!")
-        print("[!] Возможные причины:")
-        print("[!]   1. Подпись невалидна (файл изменён)")
-        print("[!]   2. Отсутствуют ключи проверки")
-        print("[!]   3. Файл повреждён")
-        print("\n[!] РЕКОМЕНДАЦИЯ: Пересоздайте baseline командой 'init'")
+        logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Не удалось загрузить baseline.json")
+        logger.critical("Проверка целостности НЕ МОЖЕТ быть выполнена!")
+        logger.critical("Возможные причины:")
+        logger.critical("  1. Подпись невалидна (файл изменён)")
+        logger.critical("  2. Отсутствуют ключи проверки")
+        logger.critical("  3. Файл повреждён")
+        logger.critical("\nРЕКОМЕНДАЦИЯ: Пересоздайте baseline командой 'init'")
         return
 
     current_files = set()
     violations = []
 
-    print(f"[*] Проверка целостности...")
+    logger.info("Проверка целостности...")
 
     for root, dirs, files in os.walk(directory):
         for file_name in files:
@@ -66,11 +69,11 @@ def check_integrity(directory):
         if stored_path not in current_files:
             violations.append(f"[УДАЛЕН] {stored_path}")
 
-    print("-" * 50)
+    logger.info("-" * 50)
     if violations:
-        print(f"[!] НАЙДЕНО НАРУШЕНИЙ: {len(violations)}")
+        logger.warning("НАЙДЕНО НАРУШЕНИЙ: %d", len(violations))
         for v in violations:
-            print(v)
+            logger.warning(v)
     else:
-        print("[+] Нарушений не обнаружено. Система чиста.")
-    print("-" * 50)
+        logger.info("Нарушений не обнаружено. Система чиста.")
+    logger.info("-" * 50)

@@ -18,38 +18,36 @@ from core.key_encryption import (
     generate_master_key,
     save_encrypted_private_key
 )
+from core.logger import setup_logging
 import config
+import logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 def save_keys_to_files(private_key, public_key, password):
-    """Сохраняет ключи в файлы (старый метод, теперь не основной)."""
-    print("\n[*] Сохранение ключей в файлы...")
+    logger.info("Сохранение ключей в файлы...")
     save_private_key(private_key, config.PRIVATE_KEY_FILE, password)
     save_public_key(public_key, config.PUBLIC_KEY_FILE)
 
 
 def save_keys_with_master_key(private_key, public_key, password, username="default"):
-    """
-    Сохраняет приватный ключ, зашифрованный мастер-ключом, в файл,
-    а мастер-ключ — в системное хранилище.
-    """
-    # 1. Проверяем или создаём мастер-ключ
     master_key = load_master_key_from_storage(username)
     if master_key is None:
-        print("[*] Мастер-ключ не найден, генерируем новый...")
+        logger.info("Мастер-ключ не найден, генерируем новый...")
         master_key = generate_master_key()
         if not save_master_key_to_storage(master_key, username):
-            print("[!] Не удалось сохранить мастер-ключ, прерываем.")
+            logger.error("Не удалось сохранить мастер-ключ, прерываем.")
             return False
     else:
-        print("[*] Мастер-ключ загружен из хранилища.")
+        logger.info("Мастер-ключ загружен из хранилища.")
 
-    # 2. Сериализуем приватный ключ в PEM (с паролем или без)
     from cryptography.hazmat.primitives import serialization
     encryption_alg = serialization.NoEncryption()
     if password is not None:
         encryption_alg = serialization.BestAvailableEncryption(password)
-        print("[*] Приватный ключ будет зашифрован паролем пользователя")
+        logger.info("Приватный ключ будет зашифрован паролем пользователя")
 
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -57,16 +55,14 @@ def save_keys_with_master_key(private_key, public_key, password, username="defau
         encryption_algorithm=encryption_alg
     )
 
-    # 3. Шифруем мастер-ключом и сохраняем в файл
     save_encrypted_private_key(private_pem, master_key, config.ENCRYPTED_PRIVATE_KEY_FILE)
 
-    # 4. Публичный ключ сохраняем в хранилище или файл
     if config.USE_KEYRING and check_storage_status()['available']:
         save_public_key_to_storage(public_key, username)
     else:
         save_public_key(public_key, config.PUBLIC_KEY_FILE)
 
-    print("[✓] Приватный ключ сохранён с использованием мастер-ключа.")
+    logger.info("Приватный ключ сохранён с использованием мастер-ключа.")
     return True
 
 
@@ -76,52 +72,46 @@ def main():
     print("=" * 60)
 
     storage_status = check_storage_status()
-    print(f"\n[*] Статус системного хранилища: {'Доступно' if storage_status['available'] else 'Недоступно'}")
+    logger.info("Статус системного хранилища: %s", 'Доступно' if storage_status['available'] else 'Недоступно')
     if storage_status['available']:
-        print(f"[*] Бэкенд: {storage_status['backend']}")
+        logger.info("Бэкенд: %s", storage_status['backend'])
 
-    # Проверка существующих ключей (файловых и мастер-ключа)
     keys_exist = False
     if os.path.exists(config.ENCRYPTED_PRIVATE_KEY_FILE):
-        print(f"\n[!] Зашифрованный приватный ключ уже существует: {config.ENCRYPTED_PRIVATE_KEY_FILE}")
+        logger.warning("Зашифрованный приватный ключ уже существует: %s", config.ENCRYPTED_PRIVATE_KEY_FILE)
         keys_exist = True
     elif storage_status['available'] and master_key_exists_in_storage(config.KEYRING_USERNAME):
-        print("\n[!] Мастер-ключ уже существует в хранилище")
+        logger.warning("Мастер-ключ уже существует в хранилище")
         keys_exist = True
 
     if keys_exist:
         response = input("Перезаписать существующие ключи? (y/N): ").strip().lower()
         if response != 'y':
-            print("[*] Отменено.")
+            logger.info("Отменено.")
             return
 
-    # Генерируем RSA пару
     private_key, public_key = generate_key_pair()
 
-    # Если хранилище недоступно — используем старый файловый метод
     if not storage_status['available']:
-        print("[!] Системное хранилище недоступно. Будет использован файловый метод.")
+        logger.warning("Системное хранилище недоступно. Будет использован файловый метод.")
         password = prompt_for_password_confirmation()
         save_keys_to_files(private_key, public_key, password)
-        print("\n[+] Ключи сохранены в файлы.")
+        logger.info("Ключи сохранены в файлы.")
         return
 
-    # Основной путь: используем мастер-ключ в хранилище
-    print("\n[*] Будет использовано двухуровневое хранение:")
-    print("    - мастер-ключ (AES) в системном хранилище")
-    print("    - зашифрованный приватный ключ в файле")
-    print("    - публичный ключ в системном хранилище (или файле)\n")
+    logger.info("Будет использовано двухуровневое хранение:")
+    logger.info("    - мастер-ключ (AES) в системном хранилище")
+    logger.info("    - зашифрованный приватный ключ в файле")
+    logger.info("    - публичный ключ в системном хранилище (или файле)")
 
-    # Запрашиваем пароль для дополнительной защиты приватного ключа (опционально)
     print("[!] Вы можете дополнительно защитить приватный ключ паролем.")
     print("[!] Это необязательно, но рекомендуется.")
     password = prompt_for_password_confirmation()
     if password:
-        print("[+] Приватный ключ будет дополнительно зашифрован паролем")
+        logger.info("Приватный ключ будет дополнительно зашифрован паролем")
     else:
-        print("[!] Предупреждение: приватный ключ не будет защищён паролем (только мастер-ключом)")
+        logger.warning("Предупреждение: приватный ключ не будет защищён паролем (только мастер-ключом)")
 
-    # Сохраняем с мастер-ключом
     success = save_keys_with_master_key(private_key, public_key, password, config.KEYRING_USERNAME)
 
     if success:
@@ -134,8 +124,9 @@ def main():
         else:
             print("[!] Приватный ключ защищён только мастер-ключом (без пароля)")
         print("\n[!] ВАЖНО: Храните мастер-ключ (в системном хранилище) и пароль в безопасности!")
+        logger.info("Генерация ключей завершена успешно.")
     else:
-        print("[!] Ошибка при сохранении ключей.")
+        logger.error("Ошибка при сохранении ключей.")
 
 
 if __name__ == '__main__':

@@ -31,3 +31,9 @@ RSA_KEY_SIZE = 2048
 
 # Путь к зашифрованному приватному ключу (используется с мастер-ключом)
 ENCRYPTED_PRIVATE_KEY_FILE = 'keys/private_key.enc'
+
+# НАСТРОЙКИ ЛОГИРОВАНИЯ
+LOG_FILE = 'logs/fim.log'
+LOG_MAX_BYTES = 5 * 1024 * 1024
+LOG_BACKUP_COUNT = 3
+LOG_LEVEL = 'INFO'

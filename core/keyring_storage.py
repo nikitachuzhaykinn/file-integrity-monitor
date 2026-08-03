@@ -1,29 +1,26 @@
-"""
-Модуль для безопасного хранения криптографических ключей
-в системном хранилище (Windows Credential Manager, macOS Keychain, Linux Secret Service)
-"""
-
 import keyring
 import config
 import base64
+import logging
+
+logger = logging.getLogger(__name__)
 
 SERVICE_NAME = "fim_project"
 
 
 def _get_winvault_backend():
-    """Возвращает экземпляр WinVaultKeyring, если доступен."""
     try:
         backends = keyring.backend.get_all_keyring()
         for backend in backends:
             if 'WinVaultKeyring' in str(backend):
                 return backend
         return None
-    except Exception:
+    except Exception as e:
+        logger.debug("Ошибка получения WinVaultKeyring: %s", e)
         return None
 
 
 def is_storage_available():
-    """Проверяет доступность системного хранилища через тестовую запись."""
     try:
         backend = _get_winvault_backend()
         if backend is None:
@@ -34,12 +31,12 @@ def is_storage_available():
         result = backend.get_password(SERVICE_NAME, test_key)
         backend.delete_password(SERVICE_NAME, test_key)
         return result == test_value
-    except Exception:
+    except Exception as e:
+        logger.debug("Хранилище недоступно: %s", e)
         return False
 
 
 def get_available_backend():
-    """Возвращает имя доступного бэкенда."""
     backend = _get_winvault_backend()
     if backend:
         return "WinVaultKeyring"
@@ -53,10 +50,10 @@ def save_key_to_storage(key_name, key_data, username="default"):
             keyring.set_password(SERVICE_NAME, f"{key_name}_{username}", key_data.decode('utf-8'))
         else:
             backend.set_password(SERVICE_NAME, f"{key_name}_{username}", key_data.decode('utf-8'))
-        print(f"[+] Ключ '{key_name}' сохранён в системном хранилище")
+        logger.info("Ключ '%s' сохранён в системном хранилище", key_name)
         return True
     except Exception as e:
-        print(f"[!] Ошибка сохранения ключа в хранилище: {e}")
+        logger.error("Ошибка сохранения ключа в хранилище: %s", e)
         return False
 
 
@@ -68,24 +65,24 @@ def load_key_from_storage(key_name, username="default"):
         else:
             key_data = backend.get_password(SERVICE_NAME, f"{key_name}_{username}")
         if key_data:
-            print(f"[+] Ключ '{key_name}' загружен из системного хранилища")
+            logger.info("Ключ '%s' загружен из системного хранилища", key_name)
             return key_data.encode('utf-8')
         return None
     except Exception as e:
-        print(f"[!] Ошибка загрузки ключа из хранилища: {e}")
+        logger.error("Ошибка загрузки ключа из хранилища: %s", e)
         return None
 
 
 def delete_key_from_storage(key_name, username="default"):
     try:
         keyring.delete_password(SERVICE_NAME, f"{key_name}_{username}")
-        print(f"[+] Ключ '{key_name}' удалён из системного хранилища")
+        logger.info("Ключ '%s' удалён из системного хранилища", key_name)
         return True
     except keyring.errors.PasswordDeleteError:
-        print(f"[!] Ключ '{key_name}' не найден в хранилище")
+        logger.warning("Ключ '%s' не найден в хранилище", key_name)
         return False
     except Exception as e:
-        print(f"[!] Ошибка удаления ключа: {e}")
+        logger.error("Ошибка удаления ключа: %s", e)
         return False
 
 
@@ -93,31 +90,27 @@ def key_exists_in_storage(key_name, username="default"):
     try:
         key_data = keyring.get_password(SERVICE_NAME, f"{key_name}_{username}")
         return key_data is not None
-    except Exception:
+    except Exception as e:
+        logger.debug("Ошибка проверки существования ключа: %s", e)
         return False
 
 
-# ---------- Функции для мастер-ключа (для обхода ограничения размера) ----------
-
 def save_master_key_to_storage(master_key: bytes, username="default"):
-    """Сохраняет мастер-ключ в системное хранилище, кодируя в base64."""
     try:
-        # Кодируем в base64 для безопасного хранения как строки
         key_b64 = base64.b64encode(master_key).decode('ascii')
         backend = _get_winvault_backend()
         if backend is None:
             keyring.set_password(SERVICE_NAME, f"master_key_{username}", key_b64)
         else:
             backend.set_password(SERVICE_NAME, f"master_key_{username}", key_b64)
-        print("[+] Мастер-ключ сохранён в системном хранилище")
+        logger.info("Мастер-ключ сохранён в системном хранилище")
         return True
     except Exception as e:
-        print(f"[!] Ошибка сохранения мастер-ключа: {e}")
+        logger.error("Ошибка сохранения мастер-ключа: %s", e)
         return False
 
 
 def load_master_key_from_storage(username="default") -> bytes | None:
-    """Загружает мастер-ключ из системного хранилища, декодируя из base64."""
     try:
         backend = _get_winvault_backend()
         if backend is None:
@@ -128,14 +121,14 @@ def load_master_key_from_storage(username="default") -> bytes | None:
             return base64.b64decode(key_b64)
         return None
     except Exception as e:
-        print(f"[!] Ошибка загрузки мастер-ключа: {e}")
+        logger.error("Ошибка загрузки мастер-ключа: %s", e)
         return None
 
 
 def master_key_exists_in_storage(username="default") -> bool:
-    """Проверяет, существует ли мастер-ключ в хранилище."""
     try:
         key_data = keyring.get_password(SERVICE_NAME, f"master_key_{username}")
         return key_data is not None
-    except Exception:
+    except Exception as e:
+        logger.debug("Ошибка проверки мастер-ключа: %s", e)
         return False

@@ -1,24 +1,16 @@
 import hashlib
 import config
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_file_hash(file_path):
-    """
-    Вычисляет хеш-сумму файла.
-
-    Аргументы:
-        file_path (str): Путь к файлу.
-
-    Возвращает:
-        str: Хеш-сумма в hex или None при ошибке.
-    """
-    # Создаем объект хеш-функции (динамически из конфига)
     hasher = hashlib.new(config.HASH_ALGORITHM)
 
     try:
         with open(file_path, "rb") as file:
             while True:
-                # Читаем файл частями
                 chunk = file.read(config.CHUNK_SIZE)
                 if not chunk:
                     break
@@ -27,7 +19,8 @@ def calculate_file_hash(file_path):
         return hasher.hexdigest()
 
     except PermissionError:
+        logger.warning("Нет прав на чтение файла: %s", file_path)
         return None
     except Exception as error:
-        print(f"[!] Ошибка чтения {file_path}: {error}")
+        logger.error("Ошибка чтения %s: %s", file_path, error)
         return None

@@ -4,6 +4,11 @@ import config
 import argparse
 from core.scanner import create_baseline, check_integrity
 from core.signature import prompt_for_password, check_storage_status
+from core.logger import setup_logging
+import logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 def print_usage():
@@ -42,8 +47,8 @@ def main():
     target_dir = os.path.normpath(args.dir)
 
     if not os.path.exists(target_dir):
-        print(f"[!] Ошибка: Папка '{target_dir}' не найдена.")
-        print("[!] Укажите существующую директорию через --dir или создайте её.")
+        logger.error("Папка '%s' не найдена.", target_dir)
+        logger.error("Укажите существующую директорию через --dir или создайте её.")
         return
 
     command = args.command.lower()
@@ -51,44 +56,40 @@ def main():
     if command == 'init':
         storage_status = check_storage_status()
         if storage_status['available']:
-            print(f"[*] Системное хранилище доступно (бэкенд: {storage_status['backend']})")
+            logger.info("Системное хранилище доступно (бэкенд: %s)", storage_status['backend'])
 
         private_key_exists = False
         password = None
 
-        # --- 1. Проверка нового метода (мастер-ключ + зашифрованный файл) ---
         if config.USE_KEYRING and storage_status['available']:
             from core.keyring_storage import master_key_exists_in_storage
             if master_key_exists_in_storage(config.KEYRING_USERNAME):
                 if os.path.exists(config.ENCRYPTED_PRIVATE_KEY_FILE):
                     private_key_exists = True
-                    print("[*] Приватный ключ найден (мастер-ключ + зашифрованный файл)")
+                    logger.info("Приватный ключ найден (мастер-ключ + зашифрованный файл)")
                 else:
-                    print("[!] Мастер-ключ есть, но файл private_key.enc отсутствует")
+                    logger.warning("Мастер-ключ есть, но файл private_key.enc отсутствует")
 
-        # --- 2. Проверка старого метода (файл private_key.pem) ---
         if not private_key_exists and os.path.exists(config.PRIVATE_KEY_FILE):
             private_key_exists = True
-            print(f"[*] Приватный ключ найден: {config.PRIVATE_KEY_FILE}")
+            logger.info("Приватный ключ найден: %s", config.PRIVATE_KEY_FILE)
 
-        # --- 3. Если ключ не найден ---
         if not private_key_exists:
-            print("[!] Warning: Приватный ключ не найден!")
-            print("[!] Для подписи baseline рекомендуется запустить: python keygen.py")
+            logger.warning("Приватный ключ не найден!")
+            logger.warning("Для подписи baseline рекомендуется запустить: python keygen.py")
             response = input("Продолжить без подписи? (y/N): ").strip().lower()
             if response != 'y':
-                print("[*] Отменено.")
+                logger.info("Отменено.")
                 return
-            # password = None
         else:
-            print("\n[*] Для подписи baseline требуется приватный ключ.")
+            logger.info("Для подписи baseline требуется приватный ключ.")
             password = prompt_for_password("Введите пароль от приватного ключа: ")
             if password is None:
-                print("[!] Пароль не введён. Попытка загрузить ключ без пароля...")
+                logger.warning("Пароль не введён. Попытка загрузить ключ без пароля...")
             else:
-                print("[*] Пароль принят")
+                logger.info("Пароль принят")
 
-        print(f"\n[*] Создание базовой линии для: {target_dir}")
+        logger.info("Создание базовой линии для: %s", target_dir)
         from core.scanner import scan_directory
         from core.baseline import save_baseline
 
@@ -96,11 +97,11 @@ def main():
         save_baseline(data, password)
 
     elif command == 'check':
-        print(f"\n[*] Проверка целостности для: {target_dir}")
+        logger.info("Проверка целостности для: %s", target_dir)
         check_integrity(target_dir)
 
     else:
-        print(f"[!] Неизвестная команда: {command}")
+        logger.error("Неизвестная команда: %s", command)
         print_usage()
 
 
