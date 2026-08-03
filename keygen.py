@@ -19,7 +19,7 @@ from core.key_encryption import (
     save_encrypted_private_key
 )
 from core.logger import setup_logging
-import config
+from core.config_loader import config
 import logging
 
 setup_logging()

@@ -3,6 +3,7 @@ from datetime import datetime
 from core.hasher import calculate_file_hash
 from core.baseline import save_baseline, load_baseline, baseline_exists
 import logging
+from core.config_loader import config
 
 logger = logging.getLogger(__name__)
 

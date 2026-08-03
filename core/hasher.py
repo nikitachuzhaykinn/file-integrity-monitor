@@ -1,6 +1,6 @@
 import hashlib
-import config
 import logging
+from core.config_loader import config
 
 logger = logging.getLogger(__name__)
 

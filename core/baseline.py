@@ -1,7 +1,7 @@
 import json
 import os
-import config
 import logging
+from core.config_loader import config
 from core.signature import (
     sign_file,
     verify_file_signature,

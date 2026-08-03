@@ -1,3 +1,4 @@
 # Зависимости проекта
 cryptography>=46.0.5
 keyring>=24.0.0
+pyyaml>=6.0

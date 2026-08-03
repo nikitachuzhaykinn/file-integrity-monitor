@@ -1,10 +1,10 @@
 import sys
 import os
-import config
 import argparse
 from core.scanner import create_baseline, check_integrity
 from core.signature import prompt_for_password, check_storage_status
 from core.logger import setup_logging
+from core.config_loader import config
 import logging
 
 setup_logging()

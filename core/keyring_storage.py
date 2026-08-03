@@ -1,5 +1,5 @@
 import keyring
-import config
+from core.config_loader import config
 import base64
 import logging
 

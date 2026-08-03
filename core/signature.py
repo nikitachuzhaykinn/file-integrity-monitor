@@ -3,8 +3,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
-import config
 import getpass
+from core.config_loader import config
 from core.keyring_storage import (
     save_key_to_storage,
     load_key_from_storage,
