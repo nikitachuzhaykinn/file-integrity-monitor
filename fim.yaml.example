@@ -19,6 +19,7 @@ default:
   log_max_bytes: 5242880
   log_backup_count: 3
   log_level: INFO
+  use_hash_cache: true
   ignore_patterns:
     - "*.tmp"
     - "__pycache__"
@@ -43,6 +44,7 @@ production:
   log_max_bytes: 10485760
   log_backup_count: 5
   log_level: WARNING
+  use_hash_cache: true
   ignore_patterns:
     - "*.tmp"
     - "__pycache__"
