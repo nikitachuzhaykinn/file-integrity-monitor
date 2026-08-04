@@ -19,12 +19,17 @@ def is_ignored(path: str, patterns: list) -> bool:
 
 
 def scan_directory(directory):
+    """
+    Сканирует директорию и возвращает словарь с относительными путями.
+    """
     file_hashes = {}
     logger.info("Сканирование: %s", directory)
 
+    # Нормализуем базовую директорию в абсолютный путь
+    base_dir = os.path.abspath(directory)
     ignore_patterns = getattr(config, 'IGNORE_PATTERNS', [])
 
-    for root, dirs, files in os.walk(directory):
+    for root, dirs, files in os.walk(base_dir):
         dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d), ignore_patterns)]
 
         for file_name in files:
@@ -35,7 +40,9 @@ def scan_directory(directory):
 
             file_hash = calculate_file_hash(full_path)
             if file_hash:
-                file_hashes[full_path] = {
+                # Вычисляем относительный путь относительно base_dir
+                rel_path = os.path.relpath(full_path, base_dir)
+                file_hashes[rel_path] = {
                     'hash': file_hash,
                     'timestamp': datetime.now().isoformat()
                 }
@@ -66,13 +73,15 @@ def check_integrity(directory):
         logger.critical("\nРЕКОМЕНДАЦИЯ: Пересоздайте baseline командой 'init'")
         return
 
-    current_files = set()
+    # Нормализуем базовую директорию
+    base_dir = os.path.abspath(directory)
+    current_files = {}
     violations = []
     ignore_patterns = getattr(config, 'IGNORE_PATTERNS', [])
 
     logger.info("Проверка целостности...")
 
-    for root, dirs, files in os.walk(directory):
+    for root, dirs, files in os.walk(base_dir):
         dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d), ignore_patterns)]
 
         for file_name in files:
@@ -80,21 +89,26 @@ def check_integrity(directory):
             if is_ignored(full_path, ignore_patterns):
                 continue
 
-            current_files.add(full_path)
-            current_hash = calculate_file_hash(full_path)
+            rel_path = os.path.relpath(full_path, base_dir)
+            current_files[rel_path] = calculate_file_hash(full_path)
 
-            if full_path not in baseline_data:
-                violations.append(f"[НОВЫЙ] {full_path}")
-            else:
-                # Защита от тайминговых атак: сравниваем хеши через compare_digest
-                stored_hash = baseline_data[full_path]['hash']
-                if not hmac.compare_digest(current_hash.encode('utf-8'), stored_hash.encode('utf-8')):
-                    violations.append(f"[ИЗМЕНЕН] {full_path}")
+    # Проверяем новые и изменённые файлы
+    for rel_path, current_hash in current_files.items():
+        if rel_path not in baseline_data:
+            violations.append(f"[НОВЫЙ] {rel_path}")
+        else:
+            stored_hash = baseline_data[rel_path]['hash']
+            if current_hash is not None and not hmac.compare_digest(
+                current_hash.encode('utf-8'),
+                stored_hash.encode('utf-8')
+            ):
+                violations.append(f"[ИЗМЕНЕН] {rel_path}")
 
-    for stored_path in baseline_data:
-        if stored_path not in current_files:
-            if not is_ignored(stored_path, ignore_patterns):
-                violations.append(f"[УДАЛЕН] {stored_path}")
+    # Проверяем удалённые файлы
+    for rel_path in baseline_data:
+        if rel_path not in current_files:
+            if not is_ignored(rel_path, ignore_patterns):
+                violations.append(f"[УДАЛЕН] {rel_path}")
 
     logger.info("-" * 50)
     if violations:
