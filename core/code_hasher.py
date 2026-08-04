@@ -1,10 +1,11 @@
 import os
 import json
+import hmac
 import fnmatch
 import logging
 from datetime import datetime
 from core.hasher import calculate_file_hash
-from core.baseline import save_baseline, load_baseline, get_private_key, get_public_key
+from core.baseline import get_private_key, get_public_key
 from core.config_loader import config
 from core.signature import sign_file, verify_file_signature
 
@@ -12,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 def is_ignored_code(path, patterns):
-    """Проверяет, должен ли файл/папка быть проигнорирован при сканировании кода."""
     base = os.path.basename(path)
     for pattern in patterns:
         if fnmatch.fnmatch(base, pattern):
@@ -21,12 +21,10 @@ def is_ignored_code(path, patterns):
 
 
 def scan_py_files(directory, ignore_patterns):
-    """Сканирует все .py файлы в директории (рекурсивно) и возвращает словарь {путь: хеш}."""
     py_files = {}
     logger.info("Сканирование .py файлов в %s", directory)
 
     for root, dirs, files in os.walk(directory):
-        # Исключаем игнорируемые папки
         dirs[:] = [d for d in dirs if not is_ignored_code(os.path.join(root, d), ignore_patterns)]
 
         for file_name in files:
@@ -46,28 +44,20 @@ def scan_py_files(directory, ignore_patterns):
 
 
 def save_code_baseline(password=None):
-    """Создаёт baseline для кода и подписывает его."""
     ignore_patterns = getattr(config, 'CODE_IGNORE_PATTERNS', [])
-    # Также добавим стандартные игнорируемые паттерны из основного конфига, если они есть
-    # Но для кода они могут быть специфическими, поэтому используем только CODE_IGNORE_PATTERNS.
-
-    # Определяем корень проекта (где находится main.py) – можно взять текущую директорию.
     project_root = os.getcwd()
     baseline_data = scan_py_files(project_root, ignore_patterns)
 
-    # Добавляем временную метку
     baseline_data['_meta'] = {
         'timestamp': datetime.now().isoformat(),
         'type': 'code_baseline'
     }
 
-    # Сохраняем в файл
     with open(config.CODE_BASELINE_FILE, 'w', encoding='utf-8') as f:
         json.dump(baseline_data, f, indent=4, ensure_ascii=False)
 
     logger.info("Кодовая базовая линия сохранена в %s", config.CODE_BASELINE_FILE)
 
-    # Подписываем
     private_key = get_private_key(password)
     if private_key:
         try:
@@ -79,7 +69,6 @@ def save_code_baseline(password=None):
 
 
 def load_code_baseline():
-    """Загружает baseline кода с проверкой подписи."""
     if not os.path.exists(config.CODE_BASELINE_FILE):
         return None
 
@@ -106,13 +95,11 @@ def load_code_baseline():
 
 
 def check_code_integrity():
-    """Проверяет целостность текущих .py файлов."""
     baseline_data = load_code_baseline()
     if baseline_data is None:
         logger.error("Кодовая базовая линия не найдена. Запустите 'code-init'.")
         return
 
-    # Удаляем мета-данные
     baseline_meta = baseline_data.pop('_meta', {})
 
     ignore_patterns = getattr(config, 'CODE_IGNORE_PATTERNS', [])
@@ -120,14 +107,15 @@ def check_code_integrity():
     current_files = scan_py_files(project_root, ignore_patterns)
 
     violations = []
-    # Проверяем новые и изменённые файлы
     for path, hash_value in current_files.items():
         if path not in baseline_data:
             violations.append(f"[НОВЫЙ] {path}")
-        elif hash_value != baseline_data[path]:
-            violations.append(f"[ИЗМЕНЕН] {path}")
+        else:
+            stored_hash = baseline_data[path]
+            # Защита от тайминговых атак
+            if not hmac.compare_digest(hash_value.encode('utf-8'), stored_hash.encode('utf-8')):
+                violations.append(f"[ИЗМЕНЕН] {path}")
 
-    # Проверяем удалённые файлы
     for path in baseline_data:
         if path not in current_files:
             violations.append(f"[УДАЛЕН] {path}")

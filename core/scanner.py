@@ -1,4 +1,5 @@
 import os
+import hmac
 from datetime import datetime
 from core.hasher import calculate_file_hash
 from core.baseline import save_baseline, load_baseline, baseline_exists
@@ -22,10 +23,8 @@ def scan_directory(directory):
     logger.info("Сканирование: %s", directory)
 
     ignore_patterns = getattr(config, 'IGNORE_PATTERNS', [])
-    logger.debug("ignore_patterns = %s", ignore_patterns)   # отладочный вывод
 
     for root, dirs, files in os.walk(directory):
-        # Удаляем игнорируемые папки из обхода
         dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d), ignore_patterns)]
 
         for file_name in files:
@@ -86,8 +85,11 @@ def check_integrity(directory):
 
             if full_path not in baseline_data:
                 violations.append(f"[НОВЫЙ] {full_path}")
-            elif current_hash != baseline_data[full_path]['hash']:
-                violations.append(f"[ИЗМЕНЕН] {full_path}")
+            else:
+                # Защита от тайминговых атак: сравниваем хеши через compare_digest
+                stored_hash = baseline_data[full_path]['hash']
+                if not hmac.compare_digest(current_hash.encode('utf-8'), stored_hash.encode('utf-8')):
+                    violations.append(f"[ИЗМЕНЕН] {full_path}")
 
     for stored_path in baseline_data:
         if stored_path not in current_files:
