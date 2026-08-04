@@ -1,11 +1,13 @@
 import os
 import hmac
+import time
 from datetime import datetime
 from core.hasher import calculate_multiple_hashes
 from core.baseline import save_baseline, load_baseline, baseline_exists
 import logging
 from core.config_loader import config
 import fnmatch
+from core.metrics import inc_files_scanned, inc_violations, set_duration, print_metrics, reset_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +21,6 @@ def is_ignored(path: str, patterns: list) -> bool:
 
 
 def scan_directory(directory):
-    """
-    Сканирует директорию и возвращает словарь с относительными путями и словарями хешей.
-    """
     file_hashes = {}
     logger.info("Сканирование: %s", directory)
 
@@ -44,6 +43,7 @@ def scan_directory(directory):
                     'hashes': hashes,
                     'timestamp': datetime.now().isoformat()
                 }
+                inc_files_scanned()
 
     logger.info("Найдено файлов: %d", len(file_hashes))
     return file_hashes
@@ -55,6 +55,9 @@ def create_baseline(directory, password=None):
 
 
 def check_integrity(directory):
+    reset_metrics('file')
+    start_time = time.time()
+
     if not baseline_exists():
         logger.error("Базовая линия не найдена. Запустите 'init'.")
         return
@@ -72,7 +75,7 @@ def check_integrity(directory):
 
     base_dir = os.path.abspath(directory)
     current_files = {}
-    violations = []
+    violations_list = []
     ignore_patterns = getattr(config, 'IGNORE_PATTERNS', [])
 
     logger.info("Проверка целостности...")
@@ -89,37 +92,47 @@ def check_integrity(directory):
             hashes = calculate_multiple_hashes(full_path)
             if hashes:
                 current_files[rel_path] = hashes
+                inc_files_scanned()
 
     # Проверяем новые и изменённые файлы
     for rel_path, current_hashes in current_files.items():
         if rel_path not in baseline_data:
-            violations.append(f"[НОВЫЙ] {rel_path}")
+            violations_list.append(f"[НОВЫЙ] {rel_path}")
+            inc_violations()
         else:
             stored_hashes = baseline_data[rel_path]['hashes']
-            # Сравниваем все алгоритмы
             for alg, current_hash in current_hashes.items():
                 if alg not in stored_hashes:
-                    # Если алгоритма нет в baseline, считаем изменение
-                    violations.append(f"[ИЗМЕНЕН] {rel_path} (новый алгоритм {alg})")
+                    violations_list.append(f"[ИЗМЕНЕН] {rel_path} (новый алгоритм {alg})")
+                    inc_violations()
                     break
                 if not hmac.compare_digest(
                     current_hash.encode('utf-8'),
                     stored_hashes[alg].encode('utf-8')
                 ):
-                    violations.append(f"[ИЗМЕНЕН] {rel_path} (не совпадает {alg})")
+                    violations_list.append(f"[ИЗМЕНЕН] {rel_path} (не совпадает {alg})")
+                    inc_violations()
                     break
 
     # Проверяем удалённые файлы
     for rel_path in baseline_data:
         if rel_path not in current_files:
             if not is_ignored(rel_path, ignore_patterns):
-                violations.append(f"[УДАЛЕН] {rel_path}")
+                violations_list.append(f"[УДАЛЕН] {rel_path}")
+                inc_violations()
+
+    # Длительность сканирования
+    duration = time.time() - start_time
+    set_duration(duration)
 
     logger.info("-" * 50)
-    if violations:
-        logger.warning("НАЙДЕНО НАРУШЕНИЙ: %d", len(violations))
-        for v in violations:
+    if violations_list:
+        logger.warning("НАЙДЕНО НАРУШЕНИЙ: %d", len(violations_list))
+        for v in violations_list:
             logger.warning(v)
     else:
         logger.info("Нарушений не обнаружено. Система чиста.")
     logger.info("-" * 50)
+
+    # Вывод статистики
+    print_metrics()

@@ -1,6 +1,7 @@
 import os
 import json
 import hmac
+import time
 import fnmatch
 import logging
 from datetime import datetime
@@ -8,6 +9,7 @@ from core.hasher import calculate_multiple_hashes
 from core.baseline import get_private_key, get_public_key
 from core.config_loader import config
 from core.signature import sign_file, verify_file_signature
+from core.metrics import inc_files_scanned, inc_violations, set_duration, print_metrics, reset_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ def scan_py_files(directory, ignore_patterns):
             hashes = calculate_multiple_hashes(full_path)
             if hashes:
                 py_files[full_path] = hashes
+                inc_files_scanned()
 
     logger.info("Найдено .py файлов: %d", len(py_files))
     return py_files
@@ -95,6 +98,9 @@ def load_code_baseline():
 
 
 def check_code_integrity():
+    reset_metrics('code')
+    start_time = time.time()
+
     baseline_data = load_code_baseline()
     if baseline_data is None:
         logger.error("Кодовая базовая линия не найдена. Запустите 'code-init'.")
@@ -106,34 +112,43 @@ def check_code_integrity():
     project_root = os.getcwd()
     current_files = scan_py_files(project_root, ignore_patterns)
 
-    violations = []
+    violations_list = []
     for path, current_hashes in current_files.items():
         if path not in baseline_data:
-            violations.append(f"[НОВЫЙ] {path}")
+            violations_list.append(f"[НОВЫЙ] {path}")
+            inc_violations()
         else:
             stored_hashes = baseline_data[path]
             for alg, current_hash in current_hashes.items():
                 if alg not in stored_hashes:
-                    violations.append(f"[ИЗМЕНЕН] {path} (новый алгоритм {alg})")
+                    violations_list.append(f"[ИЗМЕНЕН] {path} (новый алгоритм {alg})")
+                    inc_violations()
                     break
                 if not hmac.compare_digest(
                     current_hash.encode('utf-8'),
                     stored_hashes[alg].encode('utf-8')
                 ):
-                    violations.append(f"[ИЗМЕНЕН] {path} (не совпадает {alg})")
+                    violations_list.append(f"[ИЗМЕНЕН] {path} (не совпадает {alg})")
+                    inc_violations()
                     break
 
     for path in baseline_data:
         if path not in current_files:
-            violations.append(f"[УДАЛЕН] {path}")
+            violations_list.append(f"[УДАЛЕН] {path}")
+            inc_violations()
+
+    duration = time.time() - start_time
+    set_duration(duration)
 
     logger.info("-" * 50)
-    if violations:
-        logger.warning("НАЙДЕНО НАРУШЕНИЙ ЦЕЛОСТНОСТИ КОДА: %d", len(violations))
-        for v in violations:
+    if violations_list:
+        logger.warning("НАЙДЕНО НАРУШЕНИЙ ЦЕЛОСТНОСТИ КОДА: %d", len(violations_list))
+        for v in violations_list:
             logger.warning(v)
     else:
         logger.info("Код не изменён. Целостность подтверждена.")
     logger.info("-" * 50)
 
-    return violations
+    # Вывод статистики
+    print_metrics()
+    return violations_list

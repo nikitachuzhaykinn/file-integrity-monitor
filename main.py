@@ -108,7 +108,6 @@ def main():
     elif command == 'code-init':
         logger.info("Создание кодовой базовой линии...")
         password = None
-        # Проверяем наличие ключа (как в init)
         storage_status = check_storage_status()
         private_key_exists = False
         if config.USE_KEYRING and storage_status['available']:
