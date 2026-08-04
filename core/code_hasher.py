@@ -4,7 +4,7 @@ import hmac
 import fnmatch
 import logging
 from datetime import datetime
-from core.hasher import calculate_file_hash
+from core.hasher import calculate_multiple_hashes
 from core.baseline import get_private_key, get_public_key
 from core.config_loader import config
 from core.signature import sign_file, verify_file_signature
@@ -35,9 +35,9 @@ def scan_py_files(directory, ignore_patterns):
                 logger.debug("Игнорируем код: %s", full_path)
                 continue
 
-            file_hash = calculate_file_hash(full_path)
-            if file_hash:
-                py_files[full_path] = file_hash
+            hashes = calculate_multiple_hashes(full_path)
+            if hashes:
+                py_files[full_path] = hashes
 
     logger.info("Найдено .py файлов: %d", len(py_files))
     return py_files
@@ -107,14 +107,21 @@ def check_code_integrity():
     current_files = scan_py_files(project_root, ignore_patterns)
 
     violations = []
-    for path, hash_value in current_files.items():
+    for path, current_hashes in current_files.items():
         if path not in baseline_data:
             violations.append(f"[НОВЫЙ] {path}")
         else:
-            stored_hash = baseline_data[path]
-            # Защита от тайминговых атак
-            if not hmac.compare_digest(hash_value.encode('utf-8'), stored_hash.encode('utf-8')):
-                violations.append(f"[ИЗМЕНЕН] {path}")
+            stored_hashes = baseline_data[path]
+            for alg, current_hash in current_hashes.items():
+                if alg not in stored_hashes:
+                    violations.append(f"[ИЗМЕНЕН] {path} (новый алгоритм {alg})")
+                    break
+                if not hmac.compare_digest(
+                    current_hash.encode('utf-8'),
+                    stored_hashes[alg].encode('utf-8')
+                ):
+                    violations.append(f"[ИЗМЕНЕН] {path} (не совпадает {alg})")
+                    break
 
     for path in baseline_data:
         if path not in current_files:

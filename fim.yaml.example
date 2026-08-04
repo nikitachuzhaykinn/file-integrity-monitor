@@ -6,7 +6,6 @@ default:
   target_directory: ./test_folder
   baseline_file: baseline.json
   baseline_signature_file: baseline.json.sig
-  hash_algorithm: sha256
   chunk_size: 4096
   encoding: utf-8
   private_key_file: keys/private_key.pem
@@ -19,6 +18,10 @@ default:
   log_max_bytes: 5242880
   log_backup_count: 3
   log_level: INFO
+  hash_algorithms:
+    - sha256
+    - sha512
+    - blake2b
   ignore_patterns:
     - "*.tmp"
     - "__pycache__"
@@ -39,7 +42,6 @@ production:
   target_directory: /var/www/html
   baseline_file: /etc/fim/baseline.json
   baseline_signature_file: /etc/fim/baseline.json.sig
-  hash_algorithm: sha512
   chunk_size: 8192
   encoding: utf-8
   private_key_file: /etc/fim/keys/private_key.pem
@@ -52,6 +54,10 @@ production:
   log_max_bytes: 10485760
   log_backup_count: 5
   log_level: WARNING
+  hash_algorithms:
+    - sha256
+    - sha512
+    - blake2b
   ignore_patterns:
     - "*.tmp"
     - "__pycache__"

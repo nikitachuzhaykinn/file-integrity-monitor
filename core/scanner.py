@@ -1,7 +1,7 @@
 import os
 import hmac
 from datetime import datetime
-from core.hasher import calculate_file_hash
+from core.hasher import calculate_multiple_hashes
 from core.baseline import save_baseline, load_baseline, baseline_exists
 import logging
 from core.config_loader import config
@@ -20,12 +20,11 @@ def is_ignored(path: str, patterns: list) -> bool:
 
 def scan_directory(directory):
     """
-    Сканирует директорию и возвращает словарь с относительными путями.
+    Сканирует директорию и возвращает словарь с относительными путями и словарями хешей.
     """
     file_hashes = {}
     logger.info("Сканирование: %s", directory)
 
-    # Нормализуем базовую директорию в абсолютный путь
     base_dir = os.path.abspath(directory)
     ignore_patterns = getattr(config, 'IGNORE_PATTERNS', [])
 
@@ -38,12 +37,11 @@ def scan_directory(directory):
                 logger.debug("Игнорируем файл: %s", full_path)
                 continue
 
-            file_hash = calculate_file_hash(full_path)
-            if file_hash:
-                # Вычисляем относительный путь относительно base_dir
+            hashes = calculate_multiple_hashes(full_path)
+            if hashes:
                 rel_path = os.path.relpath(full_path, base_dir)
                 file_hashes[rel_path] = {
-                    'hash': file_hash,
+                    'hashes': hashes,
                     'timestamp': datetime.now().isoformat()
                 }
 
@@ -62,7 +60,6 @@ def check_integrity(directory):
         return
 
     baseline_data = load_baseline()
-
     if baseline_data is None:
         logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Не удалось загрузить baseline.json")
         logger.critical("Проверка целостности НЕ МОЖЕТ быть выполнена!")
@@ -73,7 +70,6 @@ def check_integrity(directory):
         logger.critical("\nРЕКОМЕНДАЦИЯ: Пересоздайте baseline командой 'init'")
         return
 
-    # Нормализуем базовую директорию
     base_dir = os.path.abspath(directory)
     current_files = {}
     violations = []
@@ -90,19 +86,28 @@ def check_integrity(directory):
                 continue
 
             rel_path = os.path.relpath(full_path, base_dir)
-            current_files[rel_path] = calculate_file_hash(full_path)
+            hashes = calculate_multiple_hashes(full_path)
+            if hashes:
+                current_files[rel_path] = hashes
 
     # Проверяем новые и изменённые файлы
-    for rel_path, current_hash in current_files.items():
+    for rel_path, current_hashes in current_files.items():
         if rel_path not in baseline_data:
             violations.append(f"[НОВЫЙ] {rel_path}")
         else:
-            stored_hash = baseline_data[rel_path]['hash']
-            if current_hash is not None and not hmac.compare_digest(
-                current_hash.encode('utf-8'),
-                stored_hash.encode('utf-8')
-            ):
-                violations.append(f"[ИЗМЕНЕН] {rel_path}")
+            stored_hashes = baseline_data[rel_path]['hashes']
+            # Сравниваем все алгоритмы
+            for alg, current_hash in current_hashes.items():
+                if alg not in stored_hashes:
+                    # Если алгоритма нет в baseline, считаем изменение
+                    violations.append(f"[ИЗМЕНЕН] {rel_path} (новый алгоритм {alg})")
+                    break
+                if not hmac.compare_digest(
+                    current_hash.encode('utf-8'),
+                    stored_hashes[alg].encode('utf-8')
+                ):
+                    violations.append(f"[ИЗМЕНЕН] {rel_path} (не совпадает {alg})")
+                    break
 
     # Проверяем удалённые файлы
     for rel_path in baseline_data:
