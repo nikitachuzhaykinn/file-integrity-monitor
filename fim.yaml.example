@@ -14,10 +14,16 @@ default:
   use_keyring: true
   rsa_key_size: 2048
   encrypted_private_key_file: keys/private_key.enc
+  # Логирование
   log_file: logs/fim.log
   log_max_bytes: 5242880
   log_backup_count: 3
   log_level: INFO
+  # JSON-логи
+  log_json_enabled: true
+  log_json_file: logs/fim.json
+  log_json_max_bytes: 5242880
+  log_json_backup_count: 3
   hash_algorithms:
     - sha256
     - sha512
@@ -50,10 +56,16 @@ production:
   use_keyring: true
   rsa_key_size: 4096
   encrypted_private_key_file: /etc/fim/keys/private_key.enc
-  log_file: /var/log/fim/fim.log
-  log_max_bytes: 10485760
-  log_backup_count: 5
-  log_level: WARNING
+  # Логирование
+  log_file: logs/fim.log
+  log_max_bytes: 5242880
+  log_backup_count: 3
+  log_level: INFO
+  # JSON-логи
+  log_json_enabled: true
+  log_json_file: logs/fim.json
+  log_json_max_bytes: 5242880
+  log_json_backup_count: 3
   hash_algorithms:
     - sha256
     - sha512
