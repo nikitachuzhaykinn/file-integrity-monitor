@@ -2,6 +2,7 @@ import sys
 import os
 import argparse
 from core.scanner import create_baseline, check_integrity
+from core.code_hasher import save_code_baseline, check_code_integrity
 from core.signature import prompt_for_password, check_storage_status
 from core.logger import setup_logging
 from core.config_loader import config
@@ -15,9 +16,11 @@ def print_usage():
     print("File Integrity Monitor (FIM) с цифровой подписью")
     print("-" * 50)
     print("Использование:")
-    print("  python main.py init    - Создать базовую линию")
-    print("  python main.py check   - Проверить целостность")
-    print("  python keygen.py       - Сгенерировать ключи")
+    print("  python main.py init         - Создать базовую линию для файлов")
+    print("  python main.py check        - Проверить целостность файлов")
+    print("  python main.py code-init    - Создать базовую линию для кода (.py)")
+    print("  python main.py code-check   - Проверить целостность кода (.py)")
+    print("  python keygen.py            - Сгенерировать ключи")
     print("-" * 50)
 
 
@@ -29,8 +32,8 @@ def main():
         'command',
         nargs='?',
         default=None,
-        choices=['init', 'check'],
-        help='Команда: init (создать baseline) или check (проверить целостность)'
+        choices=['init', 'check', 'code-init', 'code-check'],
+        help='Команда: init, check, code-init, code-check'
     )
     parser.add_argument(
         '--dir',
@@ -45,15 +48,14 @@ def main():
         return
 
     target_dir = os.path.normpath(args.dir)
-
-    if not os.path.exists(target_dir):
-        logger.error("Папка '%s' не найдена.", target_dir)
-        logger.error("Укажите существующую директорию через --dir или создайте её.")
-        return
-
     command = args.command.lower()
 
     if command == 'init':
+        if not os.path.exists(target_dir):
+            logger.error("Папка '%s' не найдена.", target_dir)
+            logger.error("Укажите существующую директорию через --dir или создайте её.")
+            return
+
         storage_status = check_storage_status()
         if storage_status['available']:
             logger.info("Системное хранилище доступно (бэкенд: %s)", storage_status['backend'])
@@ -97,8 +99,39 @@ def main():
         save_baseline(data, password)
 
     elif command == 'check':
+        if not os.path.exists(target_dir):
+            logger.error("Папка '%s' не найдена.", target_dir)
+            return
         logger.info("Проверка целостности для: %s", target_dir)
         check_integrity(target_dir)
+
+    elif command == 'code-init':
+        logger.info("Создание кодовой базовой линии...")
+        password = None
+        # Проверяем наличие ключа (как в init)
+        storage_status = check_storage_status()
+        private_key_exists = False
+        if config.USE_KEYRING and storage_status['available']:
+            from core.keyring_storage import master_key_exists_in_storage
+            if master_key_exists_in_storage(config.KEYRING_USERNAME):
+                if os.path.exists(config.ENCRYPTED_PRIVATE_KEY_FILE):
+                    private_key_exists = True
+        if not private_key_exists and os.path.exists(config.PRIVATE_KEY_FILE):
+            private_key_exists = True
+
+        if private_key_exists:
+            password = prompt_for_password("Введите пароль от приватного ключа: ")
+            if password is None:
+                logger.warning("Пароль не введён. Попытка загрузить ключ без пароля...")
+        else:
+            logger.warning("Приватный ключ не найден. Кодовая базовая линия будет без подписи.")
+
+        save_code_baseline(password)
+        logger.info("Кодовая базовая линия создана.")
+
+    elif command == 'code-check':
+        logger.info("Проверка целостности кода...")
+        check_code_integrity()
 
     else:
         logger.error("Неизвестная команда: %s", command)

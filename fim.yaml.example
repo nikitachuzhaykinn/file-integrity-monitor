@@ -19,13 +19,21 @@ default:
   log_max_bytes: 5242880
   log_backup_count: 3
   log_level: INFO
-  use_hash_cache: true
   ignore_patterns:
     - "*.tmp"
     - "__pycache__"
     - ".git"
     - "*.log"
     - "Thumbs.db"
+  code_baseline_file: code_baseline.json
+  code_baseline_signature_file: code_baseline.json.sig
+  code_ignore_patterns:
+    - "venv"
+    - ".git"
+    - "logs"
+    - "keys"
+    - "__pycache__"
+    - "*.pyc"
 
 production:
   target_directory: /var/www/html
@@ -44,10 +52,18 @@ production:
   log_max_bytes: 10485760
   log_backup_count: 5
   log_level: WARNING
-  use_hash_cache: true
   ignore_patterns:
     - "*.tmp"
     - "__pycache__"
     - ".git"
     - "*.log"
     - "Thumbs.db"
+  code_baseline_file: /etc/fim/code_baseline.json
+  code_baseline_signature_file: /etc/fim/code_baseline.json.sig
+  code_ignore_patterns:
+    - "venv"
+    - ".git"
+    - "logs"
+    - "keys"
+    - "__pycache__"
+    - "*.pyc"
